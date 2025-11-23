@@ -222,28 +222,28 @@ if __name__ == "__main__":
 
     # Set paths based on machine type
     # FOR GBRASNET EXPERIMENTS
-    # if args.machine == "local":
-    #     default_cover_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/INATNet/data/GBRASNET/BOSSbase-1.01-div/cover/train"
-    #     default_stego_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/INATNet/data/GBRASNET/BOSSbase-1.01-div/stego/S-UNIWARD/0.4bpp/stego/train"
-    #     default_valid_cover_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/INATNet/data/GBRASNET/BOSSbase-1.01-div/cover/val"
-    #     default_valid_stego_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/INATNet/data/GBRASNET/BOSSbase-1.01-div/stego/S-UNIWARD/0.4bpp/stego/val"
-    # else:  # server
-    #     default_cover_path = "~/data/GBRASNET/BOSSbase-1.01-div/cover/train"
-    #     default_stego_path = "~/data/GBRASNET/BOSSbase-1.01-div/stego/S-UNIWARD/0.4bpp/stego/train"
-    #     default_valid_cover_path = "~/data/GBRASNET/BOSSbase-1.01-div/cover/val"
-    #     default_valid_stego_path = "~/data/GBRASNET/BOSSbase-1.01-div/stego/S-UNIWARD/0.4bpp/stego/val"
+    if args.machine == "local":
+        default_cover_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/INATNet/data/GBRASNET/BOSSbase-1.01-div/cover/train"
+        default_stego_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/INATNet/data/GBRASNET/BOSSbase-1.01-div/stego/S-UNIWARD/0.4bpp/stego/train"
+        default_valid_cover_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/INATNet/data/GBRASNET/BOSSbase-1.01-div/cover/val"
+        default_valid_stego_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/INATNet/data/GBRASNET/BOSSbase-1.01-div/stego/S-UNIWARD/0.4bpp/stego/val"
+    else:  # server
+        default_cover_path = "~/data/GBRASNET/BOSSbase-1.01-div/cover/train"
+        default_stego_path = "~/data/GBRASNET/BOSSbase-1.01-div/stego/S-UNIWARD/0.4bpp/stego/train"
+        default_valid_cover_path = "~/data/GBRASNET/BOSSbase-1.01-div/cover/val"
+        default_valid_stego_path = "~/data/GBRASNET/BOSSbase-1.01-div/stego/S-UNIWARD/0.4bpp/stego/val"
 
     # FOR BOSSBASE-1.01 EXPERIMENTS
-    if args.machine == "local":
-        default_cover_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/SimpleSteganalysisCNN/data/boss_256_0.4/cover/train"
-        default_stego_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/SimpleSteganalysisCNN/data/boss_256_0.4/stego/train"
-        default_valid_cover_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/SimpleSteganalysisCNN/data/boss_256_0.4/cover/val"
-        default_valid_stego_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/SimpleSteganalysisCNN/data/boss_256_0.4/stego/val"
-    else:  # server
-        default_cover_path = "~/data/boss_256_0.4/cover/train"
-        default_stego_path = "~/data/boss_256_0.4/stego/train"
-        default_valid_cover_path = "~/data/boss_256_0.4/cover/val"
-        default_valid_stego_path = "~/data/boss_256_0.4/stego/val"
+    # if args.machine == "local":
+    #     default_cover_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/SimpleSteganalysisCNN/data/boss_256_0.4/cover/train"
+    #     default_stego_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/SimpleSteganalysisCNN/data/boss_256_0.4/stego/train"
+    #     default_valid_cover_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/SimpleSteganalysisCNN/data/boss_256_0.4/cover/val"
+    #     default_valid_stego_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/SimpleSteganalysisCNN/data/boss_256_0.4/stego/val"
+    # else:  # server
+    #     default_cover_path = "~/data/boss_256_0.4/cover/train"
+    #     default_stego_path = "~/data/boss_256_0.4/stego/train"
+    #     default_valid_cover_path = "~/data/boss_256_0.4/cover/val"
+    #     default_valid_stego_path = "~/data/boss_256_0.4/stego/val"
 
     parser.add_argument(
         "--cover_path",
