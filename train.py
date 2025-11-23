@@ -122,16 +122,16 @@ def validate(model, val_loader, criterion, device):
 def main(args):
     # Data transforms
     train_transform = transforms.Compose([
-        # transforms.Resize((args.image_size, args.image_size)),
+        transforms.Resize((args.image_size, args.image_size)),
         transforms.RandomHorizontalFlip(),
         transforms.RandomVerticalFlip(),
-        transforms.RandomRotation(10),
-        transforms.ToTensor()
+        transforms.ToTensor(),
+        # Remove normalization for steganography - subtle changes matter!
     ])
 
     val_transform = transforms.Compose([
-        # transforms.Resize((args.image_size, args.image_size)),
-        transforms.ToTensor()
+        transforms.Resize((args.image_size, args.image_size)),
+        transforms.ToTensor(),
     ])
 
     # Create datasets
@@ -155,8 +155,8 @@ def main(args):
     # Initialize model
     model = StegoCNN().to(device)
     criterion = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=3, factor=0.5, verbose=True)
 
     # Training loop
     print("\n" + "="*60)
@@ -173,7 +173,7 @@ def main(args):
         train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device)
         val_loss, val_acc, val_prec, val_rec, val_f1 = validate(model, val_loader, criterion, device)
 
-        scheduler.step(val_loss)
+        scheduler.step(val_acc)  # Schedule based on accuracy, not loss
 
         print(f"\nTrain Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f}")
         print(f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}")
@@ -251,7 +251,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     parser.add_argument("--epochs", type=int, default=50, help="Number of epochs")
-    parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
+    parser.add_argument("--lr", type=float, default=0.0001, help="Learning rate (default: 0.0001)")
     parser.add_argument("--image_size", type=int, default=256, help="Image size (will be resized)")
 
     args = parser.parse_args()
