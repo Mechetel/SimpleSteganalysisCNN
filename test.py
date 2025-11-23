@@ -206,12 +206,22 @@ if __name__ == "__main__":
     args, remaining = parser.parse_known_args()
 
     # Set paths based on machine type
+    # FOR GBRASNET EXPERIMENTS
+    # if args.machine == "local":
+    #     default_cover_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/INATNet/data/GBRASNET/BOSSbase-1.01-div/cover/val"
+    #     default_stego_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/INATNet/data/GBRASNET/BOSSbase-1.01-div/stego/S-UNIWARD/0.4bpp/stego/val"
+    # else:  # server
+    #     default_cover_path = "~/data/GBRASNET/BOSSbase-1.01-div/cover/val"
+    #     default_stego_path = "~/data/GBRASNET/BOSSbase-1.01-div/stego/S-UNIWARD/0.4bpp/stego/val"
+
+    # FOR BOSSBASE-1.01 EXPERIMENTS
     if args.machine == "local":
-        default_cover_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/INATNet/data/GBRASNET/BOSSbase-1.01-div/cover/val"
-        default_stego_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/INATNet/data/GBRASNET/BOSSbase-1.01-div/stego/S-UNIWARD/0.4bpp/stego/val"
+        default_cover_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/SimpleSteganalysisCNN/data/boss_256_0.4_test/cover"
+        default_stego_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/SimpleSteganalysisCNN/data/boss_256_0.4_test/stego"
     else:  # server
-        default_cover_path = "~/data/GBRASNET/BOSSbase-1.01-div/cover/val"
-        default_stego_path = "~/data/GBRASNET/BOSSbase-1.01-div/stego/S-UNIWARD/0.4bpp/stego/val"
+        default_cover_path = "~/data/boss_256_0.4_test/cover"
+        default_stego_path = "~/data/boss_256_0.4_test/stego"
+
 
     parser.add_argument(
         "--cover_path",
