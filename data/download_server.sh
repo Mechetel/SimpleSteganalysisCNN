@@ -20,3 +20,5 @@ rm ~/data/bossbase.zip
 
 git clone https://github.com/Mechetel/SimpleSteganalysisCNN.git
 bash ~/SimpleSteganalysisCNN/data/split_server.sh
+# or
+bash ~/SimpleSteganalysisCNN/data/split_server_bossbase.sh

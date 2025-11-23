@@ -163,7 +163,7 @@ def main(args):
 
     # Load model
     print(f"Loading model from: {args.model_path}")
-    model = StegoCNN().to(device)
+    model = StegoCNN(pretrained=True, freeze_resnet=True).to(device)
 
     checkpoint = torch.load(args.model_path, map_location=device)
     if 'model_state_dict' in checkpoint:

@@ -121,18 +121,21 @@ def validate(model, val_loader, criterion, device):
 
 def main(args):
     # Data transforms
-    train_transform = transforms.Compose([
-        transforms.Resize((args.image_size, args.image_size)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomVerticalFlip(),
-        transforms.ToTensor(),
-        # Remove normalization for steganography - subtle changes matter!
-    ])
+    # train_transform = transforms.Compose([
+    #     transforms.Resize((args.image_size, args.image_size)),
+    #     transforms.RandomHorizontalFlip(),
+    #     transforms.RandomVerticalFlip(),
+    #     transforms.ToTensor(),
+    #     # Remove normalization for steganography - subtle changes matter!
+    # ])
 
-    val_transform = transforms.Compose([
-        transforms.Resize((args.image_size, args.image_size)),
-        transforms.ToTensor(),
-    ])
+    # val_transform = transforms.Compose([
+    #     transforms.Resize((args.image_size, args.image_size)),
+    #     transforms.ToTensor(),
+    # ])
+
+    train_transform = transforms.Compose([transforms.ToTensor()])
+    val_transform = transforms.Compose([transforms.ToTensor()])
 
     # Create datasets
     print("Loading datasets...")
@@ -153,7 +156,7 @@ def main(args):
     print(f"\nUsing device: {device}")
 
     # Initialize model
-    model = StegoCNN().to(device)
+    model = StegoCNN(pretrained=True, freeze_resnet=True).to(device)
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=3, factor=0.5)
