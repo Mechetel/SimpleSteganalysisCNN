@@ -1,215 +1,206 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
-from PIL import Image
+from tqdm import tqdm
+import numpy as np
 import argparse
-from pathlib import Path
 import os
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from model import StegoCNN
+from model import StegoCNN, INATNet
+from utils import get_data_loaders, calculate_metrics, save_checkpoint
 
-# Custom Dataset for Steganography Detection
-class StegoDataset(Dataset):
-    def __init__(self, cover_path, stego_path, transform=None):
-        """
-        Args:
-            cover_path: Path to folder containing cover images (label 0)
-            stego_path: Path to folder containing stego images (label 1)
-            transform: Optional transform to apply to images
-        """
-        self.transform = transform
-        self.image_paths = []
-        self.labels = []
 
-        # Expand home directory if present
-        cover_path = os.path.expanduser(cover_path)
-        stego_path = os.path.expanduser(stego_path)
-
-        # Load cover images (label 0)
-        cover_images = list(Path(cover_path).glob('*.pgm')) + \
-                       list(Path(cover_path).glob('*.png')) + \
-                       list(Path(cover_path).glob('*.jpg'))
-
-        for img_path in cover_images:
-            self.image_paths.append(str(img_path))
-            self.labels.append(0)
-
-        # Load stego images (label 1)
-        stego_images = list(Path(stego_path).glob('*.pgm')) + \
-                       list(Path(stego_path).glob('*.png')) + \
-                       list(Path(stego_path).glob('*.jpg'))
-
-        for img_path in stego_images:
-            self.image_paths.append(str(img_path))
-            self.labels.append(1)
-
-        print(f"Loaded {len(cover_images)} cover images and {len(stego_images)} stego images")
-
-        if len(self.image_paths) == 0:
-            raise ValueError(f"No images found in {cover_path} or {stego_path}")
-
-    def __len__(self):
-        return len(self.image_paths)
-
-    def __getitem__(self, idx):
-        img_path = self.image_paths[idx]
-        label = self.labels[idx]
-
-        # Load image and convert to RGB
-        image = Image.open(img_path).convert('RGB')
-
-        if self.transform:
-            image = self.transform(image)
-
-        return image, torch.FloatTensor([label])
-
-# Training function
-def train_epoch(model, train_loader, criterion, optimizer, device):
+def train_one_epoch(model, train_loader, criterion, optimizer, device):
+    """Train for one epoch"""
     model.train()
-    total_loss = 0
+    running_loss = 0.0
     all_preds = []
     all_labels = []
 
-    for batch_idx, (images, labels) in enumerate(train_loader):
+    pbar = tqdm(train_loader, desc='Training')
+    for images, labels in pbar:
         images, labels = images.to(device), labels.to(device)
 
+        # Zero the parameter gradients
         optimizer.zero_grad()
-        outputs = model(images)
+
+        # Forward pass
+        outputs = model(images).squeeze()
         loss = criterion(outputs, labels)
+
+        # Backward pass and optimize
         loss.backward()
         optimizer.step()
 
-        total_loss += loss.item()
+        # Statistics
+        running_loss += loss.item() * images.size(0)
 
-        preds = (outputs >= 0.5).float()
+        # Get predictions (apply sigmoid for binary classification)
+        probs = torch.sigmoid(outputs)
+        preds = (probs > 0.5).float()
+
         all_preds.extend(preds.cpu().numpy())
         all_labels.extend(labels.cpu().numpy())
 
-        if (batch_idx + 1) % 50 == 0:
-            print(f"  Batch [{batch_idx+1}/{len(train_loader)}] Loss: {loss.item():.4f}")
+        pbar.set_postfix({'loss': loss.item()})
 
-    accuracy = accuracy_score(all_labels, all_preds)
-    return total_loss / len(train_loader), accuracy
+    epoch_loss = running_loss / len(train_loader.dataset)
+    metrics = calculate_metrics(all_labels, all_preds)
 
-# Validation function
+    return epoch_loss, metrics
+
+
 def validate(model, val_loader, criterion, device):
+    """Validate the model"""
     model.eval()
-    total_loss = 0
+    running_loss = 0.0
     all_preds = []
     all_labels = []
+    all_probs = []
 
     with torch.no_grad():
-        for images, labels in val_loader:
+        for images, labels in tqdm(val_loader, desc='Validation'):
             images, labels = images.to(device), labels.to(device)
 
-            outputs = model(images)
+            # Forward pass
+            outputs = model(images).squeeze()
             loss = criterion(outputs, labels)
-            total_loss += loss.item()
 
-            preds = (outputs >= 0.5).float()
+            # Statistics
+            running_loss += loss.item() * images.size(0)
+
+            # Get predictions and probabilities
+            probs = torch.sigmoid(outputs)
+            preds = (probs > 0.5).float()
+
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
+            all_probs.extend(probs.cpu().numpy())
 
-    accuracy = accuracy_score(all_labels, all_preds)
-    precision = precision_score(all_labels, all_preds, zero_division=0)
-    recall = recall_score(all_labels, all_preds, zero_division=0)
-    f1 = f1_score(all_labels, all_preds, zero_division=0)
+    epoch_loss = running_loss / len(val_loader.dataset)
+    metrics = calculate_metrics(all_labels, all_preds)
 
-    return total_loss / len(val_loader), accuracy, precision, recall, f1
+    return epoch_loss, metrics, all_labels, all_probs
 
-def main(args):
-    # Data transforms
-    # train_transform = transforms.Compose([
-    #     transforms.Resize((args.image_size, args.image_size)),
-    #     transforms.RandomHorizontalFlip(),
-    #     transforms.RandomVerticalFlip(),
-    #     transforms.ToTensor(),
-    #     # Remove normalization for steganography - subtle changes matter!
-    # ])
 
-    # val_transform = transforms.Compose([
-    #     transforms.Resize((args.image_size, args.image_size)),
-    #     transforms.ToTensor(),
-    # ])
+def train(args):
+    """Main training function"""
 
-    train_transform = transforms.Compose([transforms.ToTensor()])
-    val_transform = transforms.Compose([transforms.ToTensor()])
+    # Set device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+    print(f"Machine type: {args.machine}")
+    print(f"Image size: {args.img_size}")
 
-    # Create datasets
+    # Create data loaders
+    print("\n" + "="*70)
     print("Loading datasets...")
-    print(f"Train cover path: {os.path.expanduser(args.cover_path)}")
-    print(f"Train stego path: {os.path.expanduser(args.stego_path)}")
-    print(f"Val cover path: {os.path.expanduser(args.valid_cover_path)}")
-    print(f"Val stego path: {os.path.expanduser(args.valid_stego_path)}")
+    print("="*70)
+    print(f"Cover path:       {args.cover_path}")
+    print(f"Stego path:       {args.stego_path}")
+    print(f"Valid cover path: {args.valid_cover_path}")
+    print(f"Valid stego path: {args.valid_stego_path}")
 
-    train_dataset = StegoDataset(args.cover_path, args.stego_path, transform=train_transform)
-    val_dataset = StegoDataset(args.valid_cover_path, args.valid_stego_path, transform=val_transform)
+    train_loader, val_loader = get_data_loaders(
+        args.cover_path,
+        args.stego_path,
+        args.valid_cover_path,
+        args.valid_stego_path,
+        args.batch_size,
+        args.img_size,
+        augment=True
+    )
 
-    # Create dataloaders
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
-
-    # Setup device
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(f"\nUsing device: {device}")
+    print(f"\nTrain samples: {len(train_loader.dataset)}")
+    if val_loader:
+        print(f"Validation samples: {len(val_loader.dataset)}")
 
     # Initialize model
-    model = StegoCNN(pretrained=True, freeze_resnet=True).to(device)
-    criterion = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=3, factor=0.5)
+    # model = StegoCNN(pretrained=True, freeze_resnet=True).to(device)
+    model = INATNet().to(device)
+    print(f"\nModel initialized with {sum(p.numel() for p in model.parameters()):,} parameters")
+
+    # Loss function and optimizer
+    criterion = nn.BCEWithLogitsLoss()
+    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.5, patience=5, verbose=True
+    )
+
+    # Create output directory
+    os.makedirs(args.output_dir, exist_ok=True)
 
     # Training loop
-    print("\n" + "="*60)
-    print("Training started...")
-    print("="*60)
-
+    best_val_loss = float('inf')
     best_val_acc = 0.0
 
+    print("\n" + "="*70)
+    print("Starting training...")
+    print("="*70 + "\n")
+
     for epoch in range(args.epochs):
-        print(f"\n{'='*60}")
-        print(f"Epoch {epoch+1}/{args.epochs}")
-        print(f"{'='*60}")
+        print(f"\nEpoch {epoch+1}/{args.epochs}")
+        print("-" * 70)
 
-        train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device)
-        val_loss, val_acc, val_prec, val_rec, val_f1 = validate(model, val_loader, criterion, device)
+        # Train
+        train_loss, train_metrics = train_one_epoch(
+            model, train_loader, criterion, optimizer, device
+        )
 
-        scheduler.step(val_acc)  # Schedule based on accuracy, not loss
+        # Print training metrics
+        print(f"\nTrain Loss: {train_loss:.4f}")
+        print(f"Train Metrics - "
+              f"Accuracy: {train_metrics['accuracy']:.4f}, "
+              f"Precision: {train_metrics['precision']:.4f}, "
+              f"Recall: {train_metrics['recall']:.4f}, "
+              f"F1: {train_metrics['f1_score']:.4f}")
 
-        print(f"\nTrain Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f}")
-        print(f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}")
-        print(f"Val Precision: {val_prec:.4f} | Val Recall: {val_rec:.4f} | Val F1: {val_f1:.4f}")
-        print(f"Current LR: {optimizer.param_groups[0]['lr']:.6f}")
+        # Validate if validation loader exists
+        if val_loader:
+            val_loss, val_metrics, _, _ = validate(
+                model, val_loader, criterion, device
+            )
 
-        # Save best model
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'val_acc': val_acc,
-            }, 'best_stego_classifier.pth')
-            print(f"✓ Best model saved! (Val Acc: {val_acc:.4f})")
+            # Learning rate scheduler step
+            scheduler.step(val_loss)
 
-        # Save checkpoint every 10 epochs
-        if (epoch + 1) % 10 == 0:
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-            }, f'checkpoint_epoch_{epoch+1}.pth')
+            print(f"\nVal Loss: {val_loss:.4f}")
+            print(f"Val Metrics - "
+                  f"Accuracy: {val_metrics['accuracy']:.4f}, "
+                  f"Precision: {val_metrics['precision']:.4f}, "
+                  f"Recall: {val_metrics['recall']:.4f}, "
+                  f"F1: {val_metrics['f1_score']:.4f}")
 
-    print("\n" + "="*60)
+            # Save best model based on validation loss
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_val_acc = val_metrics['accuracy']
+                model_path = os.path.join(args.output_dir, 'best_model.pth')
+                save_checkpoint(model, optimizer, epoch, val_loss, model_path)
+                print(f"✓ Best model updated! (Val Loss: {best_val_loss:.4f}, Val Acc: {best_val_acc:.4f})")
+        else:
+            # If no validation set, save based on training loss
+            if train_loss < best_val_loss:
+                best_val_loss = train_loss
+                model_path = os.path.join(args.output_dir, 'best_model.pth')
+                save_checkpoint(model, optimizer, epoch, train_loss, model_path)
+                print(f"✓ Best model updated! (Train Loss: {best_val_loss:.4f})")
+
+    print("\n" + "="*70)
     print("Training completed!")
-    print(f"Best validation accuracy: {best_val_acc:.4f}")
-    print("="*60)
+    print(f"Best validation loss: {best_val_loss:.4f}")
+    if val_loader:
+        print(f"Best validation accuracy: {best_val_acc:.4f}")
+    print("="*70)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Train Steganography Detection CNN')
+    # Save final model
+    final_model_path = os.path.join(args.output_dir, 'final_model.pth')
+    save_checkpoint(model, optimizer, args.epochs, train_loss, final_model_path)
 
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Train Steganalysis Binary Classifier')
+
+    # Machine type argument (parsed first)
     parser.add_argument(
         "--machine",
         type=str,
@@ -233,7 +224,7 @@ if __name__ == "__main__":
         default_valid_cover_path = "~/data/GBRASNET/BOSSbase-1.01-div/cover/val"
         default_valid_stego_path = "~/data/GBRASNET/BOSSbase-1.01-div/stego/S-UNIWARD/0.4bpp/stego/val"
 
-    # FOR BOSSBASE-1.01 EXPERIMENTS
+    # FOR BOSSBASE-1.01 EXPERIMENTS (uncomment to use)
     # if args.machine == "local":
     #     default_cover_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/SimpleSteganalysisCNN/data/boss_256_0.4/cover/train"
     #     default_stego_path = "/Users/dmitryhoma/Projects/phd_dissertation/state_3/SimpleSteganalysisCNN/data/boss_256_0.4/stego/train"
@@ -245,6 +236,7 @@ if __name__ == "__main__":
     #     default_valid_cover_path = "~/data/boss_256_0.4/cover/val"
     #     default_valid_stego_path = "~/data/boss_256_0.4/stego/val"
 
+    # Data paths
     parser.add_argument(
         "--cover_path",
         default=default_cover_path,
@@ -265,10 +257,16 @@ if __name__ == "__main__":
         default=default_valid_stego_path,
         help="Path to validation stego images"
     )
-    parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
+
+    # Training hyperparameters
     parser.add_argument("--epochs", type=int, default=50, help="Number of epochs")
-    parser.add_argument("--lr", type=float, default=0.0001, help="Learning rate (default: 0.0001)")
-    parser.add_argument("--image_size", type=int, default=256, help="Image size (will be resized)")
+    parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
+    parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
+    parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")
+    parser.add_argument("--img_size", type=int, default=256, help="Image size")
+    parser.add_argument("--output_dir", type=str, default="./checkpoints",
+                       help="Output directory for checkpoints")
 
     args = parser.parse_args()
-    main(args)
+
+    train(args)
