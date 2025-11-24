@@ -361,7 +361,7 @@ class INATNet(nn.Module):
             nn.BatchNorm1d(256),
             nn.ReLU(inplace=True),
             nn.Dropout(0.3),
-            nn.Linear(256, 1)
+            nn.Linear(256, 1),
             nn.Sigmoid()
         )
 
