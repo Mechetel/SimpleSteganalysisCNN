@@ -362,6 +362,7 @@ class INATNet(nn.Module):
             nn.ReLU(inplace=True),
             nn.Dropout(0.3),
             nn.Linear(256, 1)
+            nn.Sigmoid()
         )
 
         # Initialize weights
