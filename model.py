@@ -39,7 +39,9 @@ class StegoCNN(nn.Module):
 
 
 
+import numpy as np
 from utils import get_srm_kernels
+import torch.nn.functional as F
 
 # ==================== Attention Modules ====================
 
@@ -275,7 +277,7 @@ class INATNet(nn.Module):
     - YeNet/YedroudjNet: Preprocessing with BatchNorm
     - ZhuNet: Strong discriminative power with residual connections
     """
-    def __init__(self, num_classes=2):
+    def __init__(self):
         super(INATNet, self).__init__()
 
         # ===== PREPROCESSING STAGE (XuNet/YeNet inspired) =====
@@ -359,7 +361,7 @@ class INATNet(nn.Module):
             nn.BatchNorm1d(256),
             nn.ReLU(inplace=True),
             nn.Dropout(0.3),
-            nn.Linear(256, num_classes)
+            nn.Linear(256, 1)
         )
 
         # Initialize weights
